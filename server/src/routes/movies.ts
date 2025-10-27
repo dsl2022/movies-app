@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { MovieRepository } from '../repositories/movieRepository.js';
-import { MovieService, RatingsService } from '../services/movieService.js';
+import { MovieService } from '../services/movieService.js';
+import { RatingsService } from '../services/ratingsService.js';
 
 const router = Router();
 const repo = new MovieRepository(process.env.DATABASE_PATH || './db/movies.db');
-const ratings = new RatingsService(repo);
+const ratings = new RatingsService();
 const svc = new MovieService(repo, ratings);
 
 const PageQuery = z.object({

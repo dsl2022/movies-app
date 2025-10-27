@@ -8,14 +8,8 @@ terraform {
     }
   }
 
-  # Uncomment after creating the backend S3 bucket
-  # backend "s3" {
-  #   bucket         = "movies-app-terraform-state"
-  #   key            = "frontend/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   encrypt        = true
-  #   dynamodb_table = "movies-app-terraform-locks"
-  # }
+  # Backend configuration moved to backend.tf
+  # Uncomment backend.tf after first apply and run: terraform init -migrate-state
 }
 
 provider "aws" {

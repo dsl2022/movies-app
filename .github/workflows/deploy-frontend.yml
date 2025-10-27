@@ -1,0 +1,170 @@
+name: Deploy Frontend to AWS
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-frontend.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'web/**'
+  workflow_dispatch: # Allow manual triggers
+
+env:
+  NODE_VERSION: '20'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  # Build and test job
+  build:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./web
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: web/dist/
+          retention-days: 7
+
+  # Deploy to development
+  deploy-dev:
+    name: Deploy to Development
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    # Optional: Configure GitHub Environments in Settings → Environments → New environment
+    # environment:
+    #   name: development
+    #   url: ${{ steps.get-url.outputs.cloudfront_url }}
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: dist
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync dist/ s3://${{ vars.S3_BUCKET_NAME_DEV }} \
+            --delete \
+            --cache-control "public, max-age=3600" \
+            --exclude "*.html" \
+            --exclude "*.json"
+
+          # HTML and JSON files should have shorter cache
+          aws s3 sync dist/ s3://${{ vars.S3_BUCKET_NAME_DEV }} \
+            --cache-control "public, max-age=300, must-revalidate" \
+            --exclude "*" \
+            --include "*.html" \
+            --include "*.json"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_DEV }} \
+            --paths "/*"
+
+      - name: Get CloudFront URL
+        id: get-url
+        run: |
+          CLOUDFRONT_URL=$(aws cloudfront get-distribution \
+            --id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_DEV }} \
+            --query 'Distribution.DomainName' \
+            --output text)
+          echo "cloudfront_url=https://$CLOUDFRONT_URL" >> $GITHUB_OUTPUT
+
+  # Deploy to production
+  deploy-prod:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Optional: Configure GitHub Environments in Settings → Environments → New environment
+    # environment:
+    #   name: production
+    #   url: ${{ steps.get-url.outputs.cloudfront_url }}
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: dist
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync dist/ s3://${{ vars.S3_BUCKET_NAME_PROD }} \
+            --delete \
+            --cache-control "public, max-age=3600" \
+            --exclude "*.html" \
+            --exclude "*.json"
+
+          # HTML and JSON files should have shorter cache
+          aws s3 sync dist/ s3://${{ vars.S3_BUCKET_NAME_PROD }} \
+            --cache-control "public, max-age=300, must-revalidate" \
+            --exclude "*" \
+            --include "*.html" \
+            --include "*.json"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} \
+            --paths "/*"
+
+      - name: Get CloudFront URL
+        id: get-url
+        run: |
+          CLOUDFRONT_URL=$(aws cloudfront get-distribution \
+            --id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} \
+            --query 'Distribution.DomainName' \
+            --output text)
+          echo "cloudfront_url=https://$CLOUDFRONT_URL" >> $GITHUB_OUTPUT
+
+      - name: Deployment summary
+        run: |
+          echo "### 🚀 Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ steps.get-url.outputs.cloudfront_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

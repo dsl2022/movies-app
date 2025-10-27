@@ -116,11 +116,24 @@ jobs:
       - name: Get ALB URL
         id: get-alb-url
         run: |
-          ALB_DNS=$(aws elbv2 describe-load-balancers \
-            --names ${{ vars.ALB_NAME_DEV }} \
+          # Get ALB DNS from ECS service's load balancer
+          ALB_ARN=$(aws ecs describe-services \
+            --cluster ${{ vars.ECS_CLUSTER_NAME_DEV }} \
+            --services ${{ vars.ECS_SERVICE_NAME_DEV }} \
+            --query 'services[0].loadBalancers[0].targetGroupArn' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          ALB_DNS=$(aws elbv2 describe-target-groups \
+            --target-group-arns $ALB_ARN \
+            --query 'TargetGroups[0].LoadBalancerArns[0]' \
+            --output text \
+            --region ${{ env.AWS_REGION }} | xargs aws elbv2 describe-load-balancers \
+            --load-balancer-arns \
             --query 'LoadBalancers[0].DNSName' \
             --output text \
             --region ${{ env.AWS_REGION }})
+
           echo "alb_url=http://$ALB_DNS" >> $GITHUB_OUTPUT
 
       - name: Test deployment
@@ -192,11 +205,24 @@ jobs:
       - name: Get ALB URL
         id: get-alb-url
         run: |
-          ALB_DNS=$(aws elbv2 describe-load-balancers \
-            --names ${{ vars.ALB_NAME_PROD }} \
+          # Get ALB DNS from ECS service's load balancer
+          ALB_ARN=$(aws ecs describe-services \
+            --cluster ${{ vars.ECS_CLUSTER_NAME_PROD }} \
+            --services ${{ vars.ECS_SERVICE_NAME_PROD }} \
+            --query 'services[0].loadBalancers[0].targetGroupArn' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          ALB_DNS=$(aws elbv2 describe-target-groups \
+            --target-group-arns $ALB_ARN \
+            --query 'TargetGroups[0].LoadBalancerArns[0]' \
+            --output text \
+            --region ${{ env.AWS_REGION }} | xargs aws elbv2 describe-load-balancers \
+            --load-balancer-arns \
             --query 'LoadBalancers[0].DNSName' \
             --output text \
             --region ${{ env.AWS_REGION }})
+
           echo "alb_url=http://$ALB_DNS" >> $GITHUB_OUTPUT
 
       - name: Test deployment
@@ -206,11 +232,14 @@ jobs:
           curl -f ${{ steps.get-alb-url.outputs.alb_url }}/api/heartbeat || exit 1
 
       - name: Deployment summary
+        env:
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+          ECR_REPO: ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY_NAME_PROD }}
         run: |
           echo "### 🚀 Backend Deployment Successful!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** ${{ env.IMAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** $ECR_REPO:$IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
           echo "**API URL:** ${{ steps.get-alb-url.outputs.alb_url }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

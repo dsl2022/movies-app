@@ -27,14 +27,8 @@ echo "--------------------"
 echo "ECR_REPOSITORY_NAME_PROD=$(terraform output -raw ecr_repository_name 2>/dev/null || echo 'N/A')"
 echo "ECS_CLUSTER_NAME_PROD=$(terraform output -raw ecs_cluster_name 2>/dev/null || echo 'N/A')"
 echo "ECS_SERVICE_NAME_PROD=$(terraform output -raw ecs_service_name 2>/dev/null || echo 'N/A')"
-
-ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null)
-if [ -n "$ALB_DNS" ]; then
-    ALB_NAME=$(echo $ALB_DNS | sed 's/-[0-9]*.*.elb.amazonaws.com//')
-    echo "ALB_NAME_PROD=$ALB_NAME"
-else
-    echo "ALB_NAME_PROD=N/A"
-fi
+echo ""
+echo "Note: ALB_NAME_PROD is no longer needed - the workflow auto-discovers it!"
 
 echo ""
 echo "=========================================="
@@ -57,13 +51,6 @@ echo "$(terraform output -raw ecs_cluster_name 2>/dev/null || echo 'N/A')"
 echo ""
 echo "ECS_SERVICE_NAME_PROD"
 echo "$(terraform output -raw ecs_service_name 2>/dev/null || echo 'N/A')"
-echo ""
-echo "ALB_NAME_PROD"
-if [ -n "$ALB_DNS" ]; then
-    echo $ALB_DNS | sed 's/-[0-9]*.*.elb.amazonaws.com//'
-else
-    echo "N/A"
-fi
 echo ""
 echo "=========================================="
 echo "✅ Add each of these to GitHub!"

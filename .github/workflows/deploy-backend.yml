@@ -1,0 +1,217 @@
+name: Deploy Backend to ECS
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-backend.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server/**'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag (default: git sha)'
+        required: false
+        type: string
+
+env:
+  AWS_REGION: 'us-east-1'
+  NODE_VERSION: '20'
+
+jobs:
+  # Build and test backend
+  build:
+    name: Build & Test Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./server
+        run: npm test
+
+      - name: Build TypeScript
+        working-directory: ./server
+        run: npm run build
+
+  # Deploy to development
+  deploy-dev:
+    name: Deploy to Development
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: image-tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build, tag, and push image to Amazon ECR
+        working-directory: ./server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY_NAME_DEV }}
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ vars.ECS_CLUSTER_NAME_DEV }} \
+            --service ${{ vars.ECS_SERVICE_NAME_DEV }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for service to stabilize
+        run: |
+          echo "Waiting for ECS service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster ${{ vars.ECS_CLUSTER_NAME_DEV }} \
+            --services ${{ vars.ECS_SERVICE_NAME_DEV }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Get ALB URL
+        id: get-alb-url
+        run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --names ${{ vars.ALB_NAME_DEV }} \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "alb_url=http://$ALB_DNS" >> $GITHUB_OUTPUT
+
+      - name: Test deployment
+        run: |
+          echo "Testing backend health check..."
+          sleep 10
+          curl -f ${{ steps.get-alb-url.outputs.alb_url }}/api/heartbeat || exit 1
+
+  # Deploy to production
+  deploy-prod:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: image-tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build, tag, and push image to Amazon ECR
+        working-directory: ./server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY_NAME_PROD }}
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ vars.ECS_CLUSTER_NAME_PROD }} \
+            --service ${{ vars.ECS_SERVICE_NAME_PROD }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for service to stabilize
+        run: |
+          echo "Waiting for ECS service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster ${{ vars.ECS_CLUSTER_NAME_PROD }} \
+            --services ${{ vars.ECS_SERVICE_NAME_PROD }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Get ALB URL
+        id: get-alb-url
+        run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --names ${{ vars.ALB_NAME_PROD }} \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "alb_url=http://$ALB_DNS" >> $GITHUB_OUTPUT
+
+      - name: Test deployment
+        run: |
+          echo "Testing backend health check..."
+          sleep 10
+          curl -f ${{ steps.get-alb-url.outputs.alb_url }}/api/heartbeat || exit 1
+
+      - name: Deployment summary
+        run: |
+          echo "### 🚀 Backend Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ env.IMAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "**API URL:** ${{ steps.get-alb-url.outputs.alb_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Health Check:** ${{ steps.get-alb-url.outputs.alb_url }}/api/heartbeat" >> $GITHUB_STEP_SUMMARY

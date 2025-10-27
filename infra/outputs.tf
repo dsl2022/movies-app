@@ -47,3 +47,59 @@ output "custom_domain" {
   description = "Custom domain name (if configured)"
   value       = var.domain_name != "" ? var.domain_name : "Not configured"
 }
+
+# Backend outputs
+output "ecr_repository_url" {
+  description = "URL of the ECR repository for backend images"
+  value       = aws_ecr_repository.backend.repository_url
+}
+
+output "ecr_repository_name" {
+  description = "Name of the ECR repository"
+  value       = aws_ecr_repository.backend.name
+}
+
+output "ecs_cluster_name" {
+  description = "Name of the ECS cluster"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "ecs_cluster_arn" {
+  description = "ARN of the ECS cluster"
+  value       = aws_ecs_cluster.main.arn
+}
+
+output "ecs_service_name" {
+  description = "Name of the ECS service"
+  value       = aws_ecs_service.backend.name
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.backend.dns_name
+}
+
+output "alb_url" {
+  description = "Full URL of the backend API"
+  value       = "http://${aws_lb.backend.dns_name}"
+}
+
+output "alb_zone_id" {
+  description = "Zone ID of the ALB (for Route53)"
+  value       = aws_lb.backend.zone_id
+}
+
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "public_subnet_ids" {
+  description = "IDs of public subnets"
+  value       = aws_subnet.public[*].id
+}

@@ -53,3 +53,21 @@ variable "backend_image_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "enable_backend_https" {
+  description = "Enable HTTPS listener on ALB (requires ACM certificate)"
+  type        = bool
+  default     = false
+}
+
+variable "backend_certificate_arn" {
+  description = "ARN of ACM certificate for backend HTTPS (required if enable_backend_https is true)"
+  type        = string
+  default     = ""
+}
+
+variable "redirect_http_to_https" {
+  description = "Redirect HTTP traffic to HTTPS (only applies if enable_backend_https is true)"
+  type        = bool
+  default     = true
+}

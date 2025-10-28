@@ -95,16 +95,44 @@ resource "aws_lb_listener" "http" {
   })
 }
 
-# HTTPS Listener (optional - uncomment and configure ACM certificate)
-# resource "aws_lb_listener" "https" {
-#   load_balancer_arn = aws_lb.backend.arn
-#   port              = 443
-#   protocol          = "HTTPS"
-#   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-#   certificate_arn   = var.acm_certificate_arn
-#
-#   default_action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.backend.arn
-#   }
-# }
+# HTTPS Listener
+resource "aws_lb_listener" "https" {
+  count             = var.enable_backend_https ? 1 : 0
+  load_balancer_arn = aws_lb.backend.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.backend_certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend.arn
+  }
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-https-listener-${var.environment}"
+    Environment = var.environment
+  })
+}
+
+# Redirect HTTP to HTTPS (optional)
+resource "aws_lb_listener_rule" "redirect_http_to_https" {
+  count        = var.enable_backend_https && var.redirect_http_to_https ? 1 : 0
+  listener_arn = aws_lb_listener.http.arn
+
+  action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/*"]
+    }
+  }
+}

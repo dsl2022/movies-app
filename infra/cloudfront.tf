@@ -26,7 +26,7 @@ resource "aws_cloudfront_distribution" "frontend" {
 
   default_cache_behavior {
     target_origin_id       = "S3-${aws_s3_bucket.frontend.id}"
-    viewer_protocol_policy = "redirect-to-https"
+    viewer_protocol_policy = "allow-all"  # Changed from redirect-to-https to allow HTTP
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
     compress               = true
@@ -49,7 +49,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   ordered_cache_behavior {
     path_pattern           = "/assets/*"
     target_origin_id       = "S3-${aws_s3_bucket.frontend.id}"
-    viewer_protocol_policy = "redirect-to-https"
+    viewer_protocol_policy = "allow-all"  # Changed from redirect-to-https to allow HTTP
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
     compress               = true

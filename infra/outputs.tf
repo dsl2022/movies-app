@@ -80,8 +80,13 @@ output "alb_dns_name" {
 }
 
 output "alb_url" {
-  description = "Full URL of the backend API"
+  description = "Full URL of the backend API (HTTP)"
   value       = "http://${aws_lb.backend.dns_name}"
+}
+
+output "alb_https_url" {
+  description = "Full HTTPS URL of the backend API (if HTTPS enabled)"
+  value       = var.enable_backend_https ? "https://${aws_lb.backend.dns_name}" : "HTTPS not enabled"
 }
 
 output "alb_zone_id" {

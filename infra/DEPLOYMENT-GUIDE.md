@@ -47,6 +47,8 @@ project_name = "movies-app-<YOUR-ACCOUNT-ID>"  # Make it unique!
 
 ## Step 2: Deploy Infrastructure
 
+**Important:** The first deployment uses local state to bootstrap the remote state infrastructure. See [BOOTSTRAP.md](BOOTSTRAP.md) for details.
+
 ```bash
 cd infra
 
@@ -64,6 +66,8 @@ This creates:
 - **Frontend**: S3 bucket + CloudFront distribution
 - **Backend**: VPC, ECS cluster, ALB, ECR repository
 - **State Management**: S3 bucket + DynamoDB table
+
+**Note:** The backend block in [backend.tf](backend.tf) is commented out for the initial bootstrap. After the first successful deployment, you can optionally migrate to remote state. See [BOOTSTRAP.md](BOOTSTRAP.md) for migration instructions.
 
 **Time:** ~5-10 minutes
 

@@ -1,6 +1,6 @@
 # S3 bucket for Terraform state
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "${var.project_name}-terraform-state"
+  bucket = "${var.project_name}-${data.aws_caller_identity.current.account_id}-terraform-state"
 
   tags = merge(var.tags, {
     Name        = "${var.project_name}-terraform-state"

@@ -21,3 +21,6 @@ provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
 }
+
+# Get AWS account ID for unique resource naming
+data "aws_caller_identity" "current" {}

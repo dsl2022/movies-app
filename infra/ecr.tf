@@ -1,6 +1,6 @@
 # ECR repository for backend Docker images
 resource "aws_ecr_repository" "backend" {
-  name                 = "${var.project_name}-backend-${var.environment}"
+  name                 = "${var.project_name}-${data.aws_caller_identity.current.account_id}-backend-${var.environment}"
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {

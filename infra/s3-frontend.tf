@@ -1,6 +1,6 @@
 # S3 bucket for frontend hosting
 resource "aws_s3_bucket" "frontend" {
-  bucket = "${var.project_name}-frontend-${var.environment}"
+  bucket = "${var.project_name}-${data.aws_caller_identity.current.account_id}-frontend-${var.environment}"
 
   tags = merge(var.tags, {
     Name        = "${var.project_name}-frontend-${var.environment}"

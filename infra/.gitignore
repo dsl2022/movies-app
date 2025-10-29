@@ -20,3 +20,8 @@ override.tf.json
 # CLI configuration
 .terraformrc
 terraform.rc
+
+# SSL Certificates (self-signed for testing)
+*.key
+*.crt
+*.pem

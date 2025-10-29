@@ -1,0 +1,52 @@
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: movies-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - DATABASE_PATH=/app/db/movies.db
+      - RATINGS_API_MODE=imdb
+      - OMDB_API_BASE=https://www.omdbapi.com
+      - OMDB_API_KEY=9d7079bb
+    volumes:
+      # Mount database for persistence
+      - ./server/db:/app/db
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/api/heartbeat', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - movies-network
+
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: movies-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE=http://localhost:4000/api
+    volumes:
+      # Mount source code for hot reload
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+      - ./web/index.html:/app/index.html
+      - ./web/vite.config.ts:/app/vite.config.ts
+      - ./web/tsconfig.json:/app/tsconfig.json
+      - ./web/tsconfig.node.json:/app/tsconfig.node.json
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - movies-network
+
+networks:
+  movies-network:
+    driver: bridge

@@ -43,12 +43,8 @@ coverage/
 .tap/
 
 # --- Env / Secrets ---
-.env
-.env.*
 !.env.sample
 !.env.example
-**/.env
-**/.env.*
 !**/.env.sample
 !**/.env.example
 
@@ -58,7 +54,6 @@ Thumbs.db
 Icon?
 ehthumbs.db
 
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -103,3 +98,8 @@ cdk.out/
 .stylelintcache
 .turbo/
 .cache-loader/
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
+config.bat
